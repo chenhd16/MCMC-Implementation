@@ -1,0 +1,211 @@
+---
+title: "MCMC"
+author: "Hedy"
+date: "2025-12-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1. Bivariate Normal Distribution
+```{r}
+myDenParams<-c(1,1,5,5,.8)
+
+den<-function(argmts,params){
+  x1<-argmts[1]
+  x2<-argmts[2]
+  u1<-params[1]
+  u2<-params[2]
+  sigma1<-params[3]
+  sigma2<-params[4]
+  ro<-params[5]
+  z<-(x1-u1)^2/(sigma1)^2-2*ro*(x1-u1)*(x2-u2)/(sigma1*sigma2)+(x2-u2)^2/(sigma2)^2
+  # f<-1/(2*pi*sigma1*sigma2*sqrt(1-ro^2))*exp(1)^(-z/(2*(1-ro^2)))
+  f<-1/(2*pi*sigma1*sigma2*sqrt(1-ro^2))*exp(-z/(2*(1-ro^2)))
+  return(f)
+}
+den(c(1,1),myDenParams)
+```
+### 2. Metropolis Rule: Single Step Iteration
+```{r}
+oneStep <- function(denFun, initSt, denParams, sigProp) {
+  prob.c <- denFun(initSt, denParams)
+  theta.1 <- rnorm(1, initSt[1], sigProp)
+  theta.2 <- rnorm(1, initSt[2], sigProp)
+  theta <- c(theta.1, theta.2)
+  prob.theta <- denFun(theta, denParams)
+  acceptance <- prob.theta / prob.c
+  
+  if (acceptance > 1 | acceptance > runif(1)) {
+    return(list(
+      state = theta,   
+      jump = 1,     
+      rej = NA        
+    ))
+  } else {
+    return(list(
+      state = initSt,  
+      jump = 0,     
+      rej = theta 
+    ))
+  }
+}
+oneStep(den,c(2,-1),myDenParams,.05)
+```
+
+### 3. Run MCMC with Different Proposal Standard Deviations
+```{r}
+runMetropolis <- function(initSt, denParams, sigProp, n_steps) {
+  init <- as.vector(initSt)
+  trajectory <- data.frame(x1 = numeric(n_steps), x2 = numeric(n_steps)) 
+  rejections <- data.frame(x1 = numeric(0), x2 = numeric(0))            
+  
+  trajectory[1, ] <- init
+  
+  for (i in 2:n_steps) { 
+    re <- oneStep(den, init, denParams, sigProp)
+    
+    init <- re$state
+    
+    if (re$jump == 1) {
+      trajectory[i, ] <- init
+    } else {
+      if (!any(is.na(re$rej))) {
+        rejections <- rbind(rejections, as.data.frame(t(re$rej)))
+      }
+      trajectory[i, ] <- init
+    }
+  }
+
+  return(list(
+    trajectory = trajectory,
+    rejections = rejections
+  ))
+}
+```
+
+#### 3.1 sigProp = 0.05
+```{r}
+init <- c(10, -10)
+burnin <- 1000
+n_steps <- 10000
+sigProp <- 0.05
+result <- runMetropolis(
+  initSt = init,
+  denParams = myDenParams,
+  sigProp = sigProp,
+  n_steps = n_steps
+)
+trajectory <- result$trajectory
+rejections <- result$rejections
+```
+
+### Plot trajectory and rejections
+```{r}
+plot(trajectory,col="blue",ylim=c(-10,10),xlim=c(-5,10),xlab="x1",ylab="x2"
+     , main = "MCMC Trajectory (sigProp = 0.05)")
+points(rejections,col="orange",pch=16)
+legend("bottomleft",legend=c("trajectory","rejections"),col=c("blue","orange"),pch=c(1,16))
+```
+#### 3.2 sigProp = 0.1
+```{r}
+init <- c(10, -10)
+burnin <- 1000
+n_steps <- 10000
+sigProp <- 0.1
+result <- runMetropolis(
+  initSt = init,
+  denParams = myDenParams,
+  sigProp = sigProp,
+  n_steps = n_steps
+)
+trajectory <- result$trajectory
+rejections <- result$rejections
+```
+
+### Plot trajectory and rejections
+```{r}
+plot(trajectory, col = "blue", ylim = c(-10,10), xlim = c(-5,10), 
+     xlab = "x1", ylab = "x2", main = "MCMC Trajectory (sigProp = 0.1)")
+points(rejections, col = "orange", pch = 16)
+legend("bottomleft", legend = c("trajectory","rejections"), 
+       col = c("blue","orange"), pch = c(1,16))
+```
+#### 3.3 sigProp = 0.01
+```{r}
+init <- c(10, -10)
+burnin <- 1000
+n_steps <- 10000
+sigProp <- 0.01
+result <- runMetropolis(
+  initSt = init,
+  denParams = myDenParams,
+  sigProp = sigProp,
+  n_steps = n_steps
+)
+trajectory <- result$trajectory
+rejections <- result$rejections
+```
+
+### Plot trajectory and rejections
+```{r}
+plot(trajectory,col="blue",ylim=c(-10,10),xlim=c(-5,10),xlab="x1",ylab="x2"
+     , main = "MCMC Trajectory (sigProp = 0.01)")
+points(rejections,col="orange",pch=16)
+legend("bottomleft",legend=c("trajectory","rejections"),col=c("blue","orange"),pch=c(1,16))
+```
+# Conclusion for sigProp analysis
+```{r}
+cat("Conclusion for different sigProp values: Larger standard deviation expands the trajectory range. When sigProp is too small (e.g., 0.01), the trajectory fails to converge effectively.\n")
+```
+### 4. MCMC with Different Initial Points
+#### 4.1 Initial point (10, -10)
+```{r}
+init <- c(10, -10)
+burnin <- 1000
+n_steps <- 10000
+sigProp <- 0.05
+result <- runMetropolis(
+  initSt = init,
+  denParams = myDenParams,
+  sigProp = sigProp,
+  n_steps = n_steps
+)
+trajectory <- result$trajectory
+rejections <- result$rejections
+```
+
+```{r}
+plot(trajectory,col="blue",ylim=c(-10,10),xlim=c(-10,10),xlab="x1",ylab="x2"
+     , main = "MCMC Trajectories with Initial Point (10,-10)")
+points(rejections,col="orange",pch=16)
+legend("bottomleft",legend=c("trajectory","rejections"),col=c("blue","orange"),pch=c(1,16))
+```
+
+#### 4.2 Initial point (-10, 10)
+```{r}
+init <- c(-10, 10)
+burnin <- 1000
+n_steps <- 10000
+sigProp <- 0.05
+result <- runMetropolis(
+  initSt = init,
+  denParams = myDenParams,
+  sigProp = sigProp,
+  n_steps = n_steps
+)
+trajectory <- result$trajectory
+rejections <- result$rejections
+```
+
+### Plot trajectories from different initial points
+```{r}
+plot(trajectory,col="blue",ylim=c(-10,10),xlim=c(-10,10),xlab="x1",ylab="x2"
+     , main = "MCMC Trajectories with Initial Point (-10,10)")
+points(rejections,col="orange",pch=16)
+legend("bottomleft",legend=c("trajectory","rejections"),col=c("blue","orange"),pch=c(1,16))
+```
+
+
